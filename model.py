@@ -3,6 +3,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn import metrics
+from ast import literal_eval
 import pandas as pd
 import numpy as np
 import logging
@@ -121,15 +122,22 @@ def loss_regression(train_data):
     return models
 
 
-def dataset_regression(df):
-    train_error = df['train_error'].tolist()
-    val_error = df['val_error'].tolist()
+def gather_input_features(df):
+
+    COUNT_SAMPLES = len(df)
 
     train_accs = []
     train_losses = []
 
     val_accs = []
     val_losses = []
+
+    init_params = np.zeros(shape=(COUNT_SAMPLES,
+                                  constants.COUNT_PROVIDED_EPOCHS))
+    for i in range(COUNT_SAMPLES):
+        init_params[i][0] = df["epochs"][i]
+        init_params[i][1] = df["number_parameters"][i]
+        init_params[i][2] = len(df["arch_and_hp"][i])
 
     for i in range(constants.COUNT_PROVIDED_EPOCHS):
         train_accs.append(df['train_accs_' + str(i)].tolist())
@@ -142,27 +150,44 @@ def dataset_regression(df):
     val_accs = np.array(list(map(list, zip(*val_accs))))
     val_losses = np.array(list(map(list, zip(*val_losses))))
 
-    # Put all the training data into one vector, containing losses, and 
-    # accuracies for each sample 
-    conglom = np.concatenate((train_accs, train_losses), axis=1)
-    conglom1 = np.concatenate((val_accs, val_losses), axis=1)
+    print(f"train_accs.shape = {train_accs.shape}")
+    print(f"init_params.shape = {init_params.shape}")
+
+    # Put all the training data into one vector, containing losses, and
+    # accuracies for each sample
+    train_features = np.concatenate((train_accs, train_losses, init_params),
+                                    axis=1)
+    val_features = np.concatenate((val_accs, val_losses, init_params), axis=1)
+
+    return train_features, val_features
+
+
+def dataset_regression(df):
+    """
+    Performs regression on the training dataset df, and returns a trained model train_loss, and val_loss.
+    """
+
+    train_error = df['train_error'].tolist()
+    val_error = df['val_error'].tolist()
+
+    train_input, val_input = gather_input_features(df)
 
     COUNT_ESTIMATORS = 90
 
-    # Use a regression model, to fit a vector containing 50 losses and 
+    # Use a regression model, to fit a vector containing 50 losses and
     # accuracies each to the final training and validation loss values
     train_regressor = RandomForestRegressor(n_estimators=COUNT_ESTIMATORS,
                                             oob_score=True,
                                             random_state=0)
-    train_regressor.fit(conglom, train_error)
+    train_regressor.fit(train_input, train_error)
 
     validation_regressor = RandomForestRegressor(n_estimators=COUNT_ESTIMATORS,
                                                  oob_score=True,
                                                  random_state=0)
-    validation_regressor.fit(conglom1, val_error)
+    validation_regressor.fit(val_input, val_error)
 
-    y_pred = train_regressor.predict(conglom)
-    y_pred1 = validation_regressor.predict(conglom1)
+    y_pred = train_regressor.predict(train_input)
+    y_pred1 = validation_regressor.predict(val_input)
 
     print('Mean Absolute Error:',
           metrics.mean_absolute_error(train_error, y_pred))
@@ -183,47 +208,26 @@ def dataset_regression(df):
 
 
 def predict_on_test_data(train_regressor, val_regressor, test_data):
-    train_accs = []
-    train_losses = []
+    train_input, val_input = gather_input_features(test_data)
 
-    val_accs = []
-    val_losses = []
-
-    for i in range(0, 50):
-        train_accs.append(test_data['train_accs_' + str(i)].tolist())
-        train_losses.append(test_data['train_losses_' + str(i)].tolist())
-        val_accs.append(test_data['val_accs_' + str(i)].tolist())
-        val_losses.append(test_data['val_losses_' + str(i)].tolist())
-
-    train_accs = np.array(list(map(list, zip(*train_accs))))
-    train_losses = np.array(list(map(list, zip(*train_losses))))
-    val_accs = np.array(list(map(list, zip(*val_accs))))
-    val_losses = np.array(list(map(list, zip(*val_losses))))
-
-    # Train
-    conglom = np.concatenate((train_accs, train_losses), axis=1)
-
-    # Val
-    conglom1 = np.concatenate((val_accs, val_losses), axis=1)
-
-    output_rows = 952
+    output_rows = len(test_data) // 2
     submission = pd.DataFrame(data={'id': [], 'Predicted': []})
 
-    for i in range(0, (output_rows // 2)):
+    for i in range(output_rows // 2):
         # print(i)
         # Val
         row1 = {
             'id': f"test_{i}_val_error",
-            'Predicted': val_regressor.predict([conglom1[i]])[0]
+            'Predicted': val_regressor.predict([val_input[i]])[0]
         }
         # Train
         row2 = {
             'id': f"test_{i}_train_error",
-            'Predicted': train_regressor.predict([conglom[i]])[0]
+            'Predicted': train_regressor.predict([train_input[i]])[0]
         }
 
-        submission = submission.append(row1, ignore_index=True)
-        submission = submission.append(row2, ignore_index=True)
+        submission = submission.append(row1, ignore_index=True).append(
+            row2, ignore_index=True)
 
     return submission
 
