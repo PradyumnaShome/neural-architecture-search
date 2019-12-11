@@ -1,0 +1,17 @@
+In this project, we used sklearn's RandomForestRegressor to predict a train and validaton error. 
+The features we used were: training and test accuracy for the first 50 epochs, and training and test loss, which were all combined into a single vector per sample, with the labels being the final train and validation error provided.
+We achieved a ~95.9% accuracy on the public half of the dataset.
+
+Here are some statistics from our model's training:
+
+Train Error
+-----------
+Mean Absolute Error: 0.010916260139055764
+Mean Squared Error: 0.00028738106109099903
+Root Mean Squared Error: 0.016952317277912157
+
+Validation Error
+----------------
+Mean Absolute Error: 0.008713028643137517
+Mean Squared Error: 0.00017969941231493143
+Root Mean Squared Error: 0.013405200942728589

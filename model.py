@@ -132,13 +132,6 @@ def gather_input_features(df):
     val_accs = []
     val_losses = []
 
-    init_params = np.zeros(shape=(COUNT_SAMPLES,
-                                  constants.COUNT_PROVIDED_EPOCHS))
-    for i in range(COUNT_SAMPLES):
-        init_params[i][0] = df["epochs"][i]
-        init_params[i][1] = df["number_parameters"][i]
-        init_params[i][2] = len(df["arch_and_hp"][i])
-
     for i in range(constants.COUNT_PROVIDED_EPOCHS):
         train_accs.append(df['train_accs_' + str(i)].tolist())
         train_losses.append(df['train_losses_' + str(i)].tolist())
@@ -151,13 +144,12 @@ def gather_input_features(df):
     val_losses = np.array(list(map(list, zip(*val_losses))))
 
     print(f"train_accs.shape = {train_accs.shape}")
-    print(f"init_params.shape = {init_params.shape}")
 
     # Put all the training data into one vector, containing losses, and
     # accuracies for each sample
-    train_features = np.concatenate((train_accs, train_losses, init_params),
+    train_features = np.concatenate((train_accs, train_losses),
                                     axis=1)
-    val_features = np.concatenate((val_accs, val_losses, init_params), axis=1)
+    val_features = np.concatenate((val_accs, val_losses), axis=1)
 
     return train_features, val_features
 
@@ -210,10 +202,10 @@ def dataset_regression(df):
 def predict_on_test_data(train_regressor, val_regressor, test_data):
     train_input, val_input = gather_input_features(test_data)
 
-    output_rows = len(test_data) // 2
+    output_rows = len(test_data)
     submission = pd.DataFrame(data={'id': [], 'Predicted': []})
 
-    for i in range(output_rows // 2):
+    for i in range(output_rows):
         # print(i)
         # Val
         row1 = {
